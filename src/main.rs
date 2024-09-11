@@ -5,8 +5,8 @@ use crate::parse::parse;
 use serde_json::{self, Map, Value};
 use std::fs;
 
-const CMU: &'static str = "/Users/mccraryezekiel/Documents/code/phoneticenglish/src/resources/cmu_dict.json";
-const CONVERSION: &'static str = "/Users/mccraryezekiel/Documents/code/phoneticenglish/src/resources/conversions.json";
+const CMU: &'static str = "src/resources/cmu_dict.json";
+const CONVERSION: &'static str = "src/resources/conversions.json";
 
 
 fn main() {
