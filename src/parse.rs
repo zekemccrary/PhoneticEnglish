@@ -3,24 +3,24 @@ use serde_json::{Value, Map};
 
 pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: Map<String, Value>) -> String {
     // parse to token vec
-    let (token_vec, capital_vec) = tokenize(text);
+    let token_vec = tokenize(text);
     
-    let mut space_count = 0_usize;
-    let mut output = String::with_capacity(token_vec.len());
+    let mut output = String::with_capacity(token_vec.len()); // minimum capacity, can this be better?
 
     for token in token_vec.iter() {
         match token {
-            Token::Space => {
-                space_count += 1;
-                output.push(' ')
-            },
+            Token::Space => output.push(' '),
+
             Token::SpecialCharacter(c) => output.push(*c),
-            Token::Word(s) => {
-                if let Some(val) = parse_map.get(&s.to_lowercase()) {
-                    output.push_str(&translate_word(val[0].as_str().unwrap(), &conversion_map, &capital_vec[space_count]))
+
+            Token::Word(v) => {
+                let word_str = &token.to_string();
+
+                if let Some(val) = parse_map.get(word_str) {
+                    output.push_str(&translate_word(val[0].as_str().unwrap(), &conversion_map, v))
                 }
                 else {
-                    output.push_str(&format!("[{s}]"));
+                    output.push_str(&format!("[{}]", word_str));
                 }
             }
         }
@@ -32,49 +32,66 @@ pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: M
 
 
 
-#[derive(Debug)]
-pub enum Token<'a> {
-    Space,
-    SpecialCharacter(char),
-    Word(&'a str),
+use std::fmt;
+impl fmt::Display for Token {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Token::Space => write!(fmt, " "),
+            Token::SpecialCharacter(c) => write!(fmt, "{c}"),
+            Token::Word(vec) => {
+                let byte_arr: Vec<u8> = vec.iter().map(|c| c.character).collect();
+                write!(fmt, "{}", String::from_utf8_lossy(byte_arr.as_slice()))
+            },
+        }
+    }
 }
 
-fn tokenize<'a>(input: &'a str) -> (Vec<Token<'a>>, Vec<Vec<usize>>) {
-    let separated: std::str::Split<'a, char> = input.split(' ');
-    let separated_size = separated.clone().count();
-    let mut token_vec: Vec<Token<'a>> = Vec::new();
 
-    // `capital_vec` is the same length as `separated`
-    // meaning even if two words are separated by a '-' or another non-space character
-    // `capital_vec` will consider them the same word
-    let mut capital_vec: Vec<Vec<usize>> = Vec::with_capacity(separated_size);
-            capital_vec.resize(separated_size, Vec::new());
+#[derive(Clone, Debug)]
+struct Character{
+    character: u8,
+    is_capitalized: bool,
+}
+#[derive(Debug)]
+enum Token {
+    Space,
+    SpecialCharacter(char),
+    Word(Vec<Character>),
+}
 
-    for (i, word) in separated.enumerate() {
-        let mut start_index: usize = 0;
+fn tokenize<'a>(input: &'a str) -> Vec<Token> {
+    let mut token_vec: Vec<Token> = Vec::new();
+    let mut word_vec = Vec::<Character>::new();
 
-        for (j, c) in word.chars().enumerate() {
+
+    for word in input.split(' ') {
+        for c in word.chars() {
         // TODO: could this all be a match statement?
             // if `c` is a letter or apostrophe, it's part of a word
             if c.is_ascii_alphabetic() || c == '\'' {
-                if c == c.to_ascii_uppercase() { capital_vec[i].push(j); }
+                let capped = c == c.to_ascii_uppercase();
+                word_vec.push(
+                    Character{
+                        character: if capped { c.to_ascii_lowercase() as u8 } else { c as u8 },
+                        is_capitalized: capped,
+                    }
+                );
                 continue;
             }
 
             // otherwise, the word is over, so push it into the token vector
-            if start_index != j {
-                token_vec.push(Token::Word(&word[start_index..j]));
+            if word_vec.len() > 0 {
+                token_vec.push(Token::Word(word_vec.clone()));
+                word_vec = Vec::new();
             }
             // and then push the non-letter non-apostrophe character
             token_vec.push(Token::SpecialCharacter(c));
-
-            // and reset `start_index`
-            start_index = j + 1;
         }
 
-
-        if start_index != word.len() { 
-            token_vec.push(Token::Word(&word[start_index..])); 
+        // if the last character was a letter and not a symbol
+        if word_vec.len() > 0 { 
+            token_vec.push(Token::Word(word_vec.clone()));
+            word_vec = Vec::new();
         }
         token_vec.push(Token::Space);
     }
@@ -82,45 +99,30 @@ fn tokenize<'a>(input: &'a str) -> (Vec<Token<'a>>, Vec<Vec<usize>>) {
     // remove trailing space
     token_vec.pop();
 
-    (token_vec, capital_vec)
+    token_vec
 }
 
 
-fn translate_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, capitals: &Vec<usize>) -> String {
-    let mut iterator: std::slice::Iter<'_, usize> = capitals.iter();
 
-    // if there are no capitals left in the word then stop trying iterator.next()
-    let mut are_capitals_remaining = true;
 
-    // manual iteration because it felt like a rust thing to do
-    let mut current_capital_index = match iterator.next() {
-        Some(i) => *i,
-        None => { are_capitals_remaining = false; 0 }
-    };
 
+
+fn translate_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char_vec: &Vec<Character>) -> String {
     let mut string_builder = String::with_capacity(word_str.len() /* >> 1 ? */);
 
-    for (i, phoneme) in word_str.split(' ').enumerate() {
+    for (phoneme, c) in word_str.split(' ').zip(char_vec) {
         // if phoneme length is 3 it has a number on the end we don't use (it is ok to slice the str because the map only has ascii)
         let shortened: &str = if phoneme.len() == 3 { &phoneme[..2] } else { phoneme };
 
-        let capped = if are_capitals_remaining && current_capital_index == i {
-            current_capital_index = match iterator.next() {
-                Some(i) => *i,
-                None => { are_capitals_remaining = false; 0 }
-            };
-            &shortened.to_ascii_uppercase()
-        }
-        else { shortened };
+        let new_word = if let Some(val) = conversion_map.get(shortened) { val.as_str().unwrap() }
+                             else                                                          { shortened };
 
 
-        if let Some(val) = conversion_map.get(capped)
-        {
-            string_builder.push_str(val.as_str().unwrap());
+        if c.is_capitalized {
+            string_builder.push_str(&new_word.to_ascii_uppercase());
         }
-        else 
-        {
-            string_builder.push_str(capped);
+        else {
+            string_builder.push_str(new_word);
         }
     }
 
