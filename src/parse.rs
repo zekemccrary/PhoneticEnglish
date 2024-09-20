@@ -11,6 +11,8 @@ pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: M
         match token {
             Token::Space => output.push(' '),
 
+            Token::Apostrophe => output.push('\''),
+
             Token::SpecialCharacter(c) => output.push(*c),
 
             Token::Word(v) => {
@@ -37,6 +39,7 @@ impl fmt::Display for Token {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Token::Space => write!(fmt, " "),
+            Token::Apostrophe => write!(fmt, "'"),
             Token::SpecialCharacter(c) => write!(fmt, "{c}"),
             Token::Word(vec) => {
                 let byte_arr: Vec<u8> = vec.iter().map(|c| c.character).collect();
@@ -48,30 +51,49 @@ impl fmt::Display for Token {
 
 
 #[derive(Clone, Debug)]
-struct Character{
+struct AsciiCharacter {
     character: u8,
     is_capitalized: bool,
 }
 #[derive(Debug)]
 enum Token {
     Space,
+    Apostrophe,
     SpecialCharacter(char),
-    Word(Vec<Character>),
+    Word(Vec<AsciiCharacter>),
 }
 
 fn tokenize<'a>(input: &'a str) -> Vec<Token> {
     let mut token_vec: Vec<Token> = Vec::new();
-    let mut word_vec = Vec::<Character>::new();
+    let mut word_vec = Vec::<AsciiCharacter>::new();
 
 
     for word in input.split(' ') {
-        for c in word.chars() {
+        for (i, c) in word.chars().enumerate() {
         // TODO: could this all be a match statement?
-            // if `c` is a letter or apostrophe, it's part of a word
-            if c.is_ascii_alphabetic() || c == '\'' {
-                let capped = c == c.to_ascii_uppercase();
+            // if `c` is an apostrophe, it is either a quote or part of a contraction
+            if c == '\'' {
+                // it is a beginning quote or an end quote
+                if word_vec.len() == 0 || word.len() == i + 1 {
+                    token_vec.push(Token::Apostrophe);
+                    continue;
+                }
+
                 word_vec.push(
-                    Character{
+                    AsciiCharacter {
+                        character: b'\'',
+                        is_capitalized: false,
+                    }
+                );
+                continue;
+            }
+
+            // if `c` is a letter, it's part of a word
+            if c.is_ascii_alphabetic() {
+                let capped = c == c.to_ascii_uppercase();
+
+                word_vec.push(
+                    AsciiCharacter {
                         character: if capped { c.to_ascii_lowercase() as u8 } else { c as u8 },
                         is_capitalized: capped,
                     }
@@ -107,23 +129,27 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
 
 
 
-fn translate_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char_vec: &Vec<Character>) -> String {
+fn translate_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char_vec: &Vec<AsciiCharacter>) -> String {
     let mut string_builder = String::with_capacity(word_str.len() /* >> 1 ? */);
 
     for (phoneme, c) in word_str.split(' ').zip(char_vec) {
-        // if phoneme length is 3 it has a number on the end we don't use (it is ok to slice the str because the map only has ascii)
+        // if phoneme length is 3 it has a number on the end that we don't use (it is ok to slice the str because the map only has ascii)
         let shortened: &str = if phoneme.len() == 3 { &phoneme[..2] } else { phoneme };
 
         let new_word = if let Some(val) = conversion_map.get(shortened) { val.as_str().unwrap() }
                              else                                                          { shortened };
 
+        let mut chars = new_word.chars();
 
-        if c.is_capitalized {
-            string_builder.push_str(&new_word.to_ascii_uppercase());
-        }
-        else {
-            string_builder.push_str(new_word);
-        }
+        let mut first_char = chars.next().expect("Unexpected 0-length phoneme in dataset");
+        if c.is_capitalized { first_char.make_ascii_uppercase(); }
+
+        // there should always be one character
+        string_builder.push(first_char);
+
+        // maximum phoneme length is 2
+        if let Some(c) = chars.next()
+        { string_builder.push(c); }
     }
 
     string_builder
