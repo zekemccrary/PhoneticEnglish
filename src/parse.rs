@@ -19,7 +19,7 @@ pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: M
                 let word_str = &token.to_string();
 
                 if let Some(val) = parse_map.get(word_str) {
-                    output.push_str(&translate_word(val[0].as_str().unwrap(), &conversion_map, v))
+                    output.push_str(&convert_word(val[0].as_str().unwrap(), &conversion_map, v))
                 }
                 else {
                     output.push_str(&format!("[{}]", word_str));
@@ -30,6 +30,7 @@ pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: M
 
     output
 }
+
 
 
 
@@ -49,7 +50,6 @@ impl fmt::Display for Token {
     }
 }
 
-
 #[derive(Clone, Debug)]
 struct AsciiCharacter {
     character: u8,
@@ -62,6 +62,8 @@ enum Token {
     SpecialCharacter(char),
     Word(Vec<AsciiCharacter>),
 }
+
+
 
 fn tokenize<'a>(input: &'a str) -> Vec<Token> {
     let mut token_vec: Vec<Token> = Vec::new();
@@ -126,31 +128,41 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
 
 
 
-
-
-
-fn translate_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char_vec: &Vec<AsciiCharacter>) -> String {
+fn convert_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char_vec: &Vec<AsciiCharacter>) -> String {
     let mut string_builder = String::with_capacity(word_str.len() /* >> 1 ? */);
 
-    for (phoneme, c) in word_str.split(' ').zip(char_vec) {
-        // if phoneme length is 3 it has a number on the end that we don't use (it is ok to slice the str because the map only has ascii)
+    // if the original characters and new phonemes don't match up, we have to turn capitalization off (workshop this solution)
+    let mut do_capitals = true;
+    let num_phonemes: usize = word_str.bytes().filter(|b| *b == b' ').count();
+
+    // check if there are more phonemes than there were characters
+    if num_phonemes != char_vec.len() { do_capitals = false; }
+
+
+    for (i, phoneme) in word_str.split(' ').enumerate() {
+        // it is ok to slice the str because the map only has ascii
         let shortened: &str = if phoneme.len() == 3 { &phoneme[..2] } else { phoneme };
+        let new_word: &str = if let Some(val) = conversion_map.get(shortened) { val.as_str().unwrap() }
+                             else                                                         { shortened };
 
-        let new_word = if let Some(val) = conversion_map.get(shortened) { val.as_str().unwrap() }
-                             else                                                          { shortened };
+        let mut chars: std::str::Chars<'_> = new_word.chars();
+        let mut first_char: char = chars.next().expect("Unexpected 0-length phoneme in dataset");
 
-        let mut chars = new_word.chars();
 
-        let mut first_char = chars.next().expect("Unexpected 0-length phoneme in dataset");
-        if c.is_capitalized { first_char.make_ascii_uppercase(); }
+        // capitalize
+        if let Some(ac) = char_vec.get(i) {
+            if (do_capitals || i == 0) && ac.is_capitalized
+            { first_char.make_ascii_uppercase(); }
+        }
 
-        // there should always be one character
+
+        // add to stringbuilder
         string_builder.push(first_char);
 
-        // maximum phoneme length is 2
         if let Some(c) = chars.next()
         { string_builder.push(c); }
     }
+
 
     string_builder
 }
