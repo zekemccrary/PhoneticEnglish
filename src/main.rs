@@ -12,7 +12,7 @@ const CONVERSION: &'static str = "src/resources/conversions.json";
 fn main() {
     let parse_map = get_map_from_file(&CMU);
     let conversion_map = get_map_from_file(&CONVERSION);
-    let text = "Hello. Hi. T!h!e ostrick-catcher wasn't dead!!";
+    let text = "I sat up and said 'The dog is dead.' ' I'd got that far,' he said. I said, 'I think someone killed the dog.' 'How old are you?’ he asked. I didn't answer.";
 
     let new_text = parse(text, parse_map, conversion_map);
 
