@@ -24,13 +24,13 @@ pub fn parse<'a>(text: &'a str, parse_map: Map<String, Value>, conversion_map: M
                 else {
                     output.push_str(&format!("[{}]", word_str));
                 }
-            }
+            },
         }
+
     }
 
     output
 }
-
 
 
 
@@ -55,6 +55,7 @@ struct AsciiCharacter {
     character: u8,
     is_capitalized: bool,
 }
+
 #[derive(Debug)]
 enum Token {
     Space,
@@ -65,14 +66,16 @@ enum Token {
 
 
 
+
 fn tokenize<'a>(input: &'a str) -> Vec<Token> {
+    // final vec
     let mut token_vec: Vec<Token> = Vec::new();
+    // temporary vec
     let mut word_vec = Vec::<AsciiCharacter>::new();
 
 
     for word in input.split(' ') {
         for (i, c) in word.chars().enumerate() {
-        // TODO: could this all be a match statement?
             // if `c` is an apostrophe, it is either a quote or part of a contraction
             if c == '\'' {
                 // it is a beginning quote or an end quote
@@ -96,6 +99,7 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
 
                 word_vec.push(
                     AsciiCharacter {
+                        // is this optimal?
                         character: if capped { c.to_ascii_lowercase() as u8 } else { c as u8 },
                         is_capitalized: capped,
                     }
@@ -103,12 +107,14 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
                 continue;
             }
 
-            // otherwise, the word is over, so push it into the token vector
+            // at a non-alphabetic, non-apostrophe symbol, the word is over, so:
             if word_vec.len() > 0 {
+                // push to token vec
                 token_vec.push(Token::Word(word_vec.clone()));
+                // reset word vec
                 word_vec = Vec::new();
             }
-            // and then push the non-letter non-apostrophe character
+            // and then push the non-alphabetic non-apostrophe character
             token_vec.push(Token::SpecialCharacter(c));
         }
 
@@ -120,6 +126,7 @@ fn tokenize<'a>(input: &'a str) -> Vec<Token> {
         token_vec.push(Token::Space);
     }
 
+    
     // remove trailing space
     token_vec.pop();
 
@@ -139,6 +146,7 @@ fn convert_word<'a>(word_str: &'a str, conversion_map: &Map<String, Value>, char
     if num_phonemes != char_vec.len() { do_capitals = false; }
 
 
+    
     for (i, phoneme) in word_str.split(' ').enumerate() {
         // it is ok to slice the str because the map only has ascii
         let shortened: &str = if phoneme.len() == 3 { &phoneme[..2] } else { phoneme };
