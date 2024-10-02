@@ -10,11 +10,12 @@ const CONVERSION: &'static str = "src/resources/conversions.json";
 
 
 fn main() {
+    let text = get_input();
+
     let parse_map = get_map_from_file(&CMU);
     let conversion_map = get_map_from_file(&CONVERSION);
-    let text = "I sat up and said 'The dog is dead.' ' I'd got that far,' he said. I said, 'I think someone killed the dog.' 'How old are you?’ he asked. I didn't answer.";
 
-    let new_text = parse(text, parse_map, conversion_map);
+    let new_text = parse(&text, parse_map, conversion_map);
 
     println!("{new_text}");
 }
@@ -26,4 +27,8 @@ fn get_map_from_file(filepath: &str) -> Map<String, Value> {
     let db = fs::read_to_string(filepath).expect("Could not read file");
     
     serde_json::from_str(&db).expect("Failed to read json")
+}
+
+fn get_input() -> String {
+    return "I sat up and said 'The dog is dead.' ' I'd got that far,' he said. I said, 'I think someone killed the dog.' 'How old are you?’ he asked. I didn't answer.".to_string();
 }
